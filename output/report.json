@@ -1,0 +1,124 @@
+{
+  "scan_timestamp": "2026-05-23T16:55:51Z",
+  "account_id": "123456789012",
+  "region": "us-east-1",
+  "summary": {
+    "total_orphans": 8,
+    "estimated_monthly_waste_usd": 58.21
+  },
+  "findings": [
+    {
+      "resource_id": "vol-d76eead0",
+      "resource_type": "ebs_volume",
+      "reason": "unattached",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 8.0,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "data-engineering"
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-4646b202",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.64,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-4ea2246c",
+      "resource_type": "ebs_volume",
+      "reason": "unattached",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 40.0,
+      "tags": {
+        "Project": null,
+        "Environment": "prod",
+        "Owner": null
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-97eecf20",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.64,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-21493ed7",
+      "resource_type": "ebs_volume",
+      "reason": "unattached",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 4.0,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "platform-team",
+        "Protected": "true"
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "i-9e6466231e3d4261c",
+      "resource_type": "ec2_instance",
+      "reason": "stopped>14d",
+      "age_days": 31,
+      "estimated_monthly_cost_usd": 0.64,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "backend-team"
+      },
+      "suggested_action": "terminate",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "i-5419aef9c3c1a6eeb",
+      "resource_type": "ec2_instance",
+      "reason": "missing_tags:Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.64,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "terminate",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "eipalloc-cb6b29a8",
+      "resource_type": "elastic_ip",
+      "reason": "idle_eip",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 3.65,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "platform-team"
+      },
+      "suggested_action": "release",
+      "safe_to_auto_delete": false
+    }
+  ]
+}

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>NimbusKart · Cost Janitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── Animated gradient background ── */
+body{
+  min-height:100vh;
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:14px;
+  color:#e2e8f0;
+  background:#020817;
+  overflow-x:hidden;
+}
+.bg-canvas{
+  position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(99,102,241,.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(168,85,247,.14) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(6,182,212,.08) 0%, transparent 60%),
+    linear-gradient(135deg,#020817 0%,#0a0f1e 50%,#060d1a 100%);
+}
+/* floating orbs */
+.orb{position:fixed;border-radius:50%;filter:blur(80px);pointer-events:none;z-index:0;animation:drift 20s ease-in-out infinite alternate;}
+.orb1{width:600px;height:600px;top:-200px;left:-150px;background:radial-gradient(circle,rgba(99,102,241,.12),transparent 70%);animation-duration:25s;}
+.orb2{width:500px;height:500px;bottom:-100px;right:-100px;background:radial-gradient(circle,rgba(168,85,247,.10),transparent 70%);animation-duration:30s;animation-delay:-10s;}
+.orb3{width:400px;height:400px;top:40%;left:60%;background:radial-gradient(circle,rgba(6,182,212,.08),transparent 70%);animation-duration:20s;animation-delay:-5s;}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,30px) scale(1.05)}}
+
+/* ── Glass mixin ── */
+.glass{
+  background:rgba(255,255,255,.04);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+}
+.glass-strong{
+  background:rgba(255,255,255,.07);
+  backdrop-filter:blur(30px) saturate(200%);
+  -webkit-backdrop-filter:blur(30px) saturate(200%);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:16px;
+}
+
+/* ── Layout ── */
+.page{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:0 28px 80px;}
+</style>
+<style>
+/* ── Top nav ── */
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(2,8,23,.7);
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
+  border-bottom:1px solid rgba(255,255,255,.07);
+  padding:0 28px;height:64px;
+  display:flex;align-items:center;gap:16px;
+}
+.nav-logo{display:flex;align-items:center;gap:10px;}
+.nav-logo svg{width:32px;height:32px;}
+.nav-title{font-size:17px;font-weight:700;letter-spacing:-.3px;
+  background:linear-gradient(135deg,#a5b4fc,#818cf8,#c084fc);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.nav-sub{font-size:11px;color:rgba(255,255,255,.35);font-weight:400;margin-top:1px;}
+.nav-divider{width:1px;height:28px;background:rgba(255,255,255,.1);}
+.nav-pill{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);
+  color:#fca5a5;font-size:11px;font-weight:600;
+  padding:4px 10px;border-radius:20px;letter-spacing:.3px;
+}
+.nav-pill .dot{width:6px;height:6px;border-radius:50%;background:#ef4444;
+  box-shadow:0 0 6px #ef4444;animation:pulse-dot 2s ease-in-out infinite;}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.nav-spacer{flex:1;}
+.nav-meta{font-size:11px;color:rgba(255,255,255,.3);text-align:right;line-height:1.5;}
+.nav-meta strong{color:rgba(255,255,255,.55);font-weight:500;}
+
+/* ── Page header ── */
+.page-header{padding:40px 0 32px;}
+.page-header h1{
+  font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.1;
+  background:linear-gradient(135deg,#f8fafc 0%,#cbd5e1 60%,#94a3b8 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.page-header p{margin-top:8px;font-size:14px;color:rgba(255,255,255,.4);font-weight:400;}
+.header-row{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+.scan-badge{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);
+  padding:8px 14px;border-radius:10px;font-size:12px;color:#a5b4fc;
+}
+.scan-badge svg{width:14px;height:14px;opacity:.7;}
+
+/* ── KPI grid ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:28px;}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.kpi-grid{grid-template-columns:1fr 1fr}}
+
+.kpi-card{
+  position:relative;overflow:hidden;
+  padding:22px 22px 18px;
+  transition:transform .2s,box-shadow .2s;cursor:default;
+}
+.kpi-card:hover{transform:translateY(-3px);box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.kpi-card::before{
+  content:'';position:absolute;inset:0;border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,255,255,.06) 0%,transparent 60%);
+  pointer-events:none;
+}
+.kpi-glow{
+  position:absolute;top:-30px;right:-30px;
+  width:100px;height:100px;border-radius:50%;
+  filter:blur(40px);opacity:.5;pointer-events:none;
+}
+.kpi-icon{
+  width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;margin-bottom:14px;
+}
+.kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;
+  color:rgba(255,255,255,.35);margin-bottom:6px;}
+.kpi-value{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;}
+.kpi-sub{font-size:11px;color:rgba(255,255,255,.3);margin-top:6px;}
+.kpi-trend{
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;margin-top:8px;
+}
+</style>
+<style>
+/* ── Charts row ── */
+.charts-row{display:grid;grid-template-columns:1.2fr 1fr 1.8fr;gap:16px;margin-bottom:28px;}
+@media(max-width:1000px){.charts-row{grid-template-columns:1fr 1fr;}}
+@media(max-width:650px){.charts-row{grid-template-columns:1fr;}}
+.chart-card{padding:22px;position:relative;overflow:hidden;}
+.chart-card::before{
+  content:'';position:absolute;inset:0;border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,255,255,.05) 0%,transparent 50%);
+  pointer-events:none;
+}
+.chart-title{
+  font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;
+  color:rgba(255,255,255,.35);margin-bottom:18px;
+  display:flex;align-items:center;gap:8px;
+}
+.chart-title span{
+  width:6px;height:6px;border-radius:50%;display:inline-block;
+}
+.chart-wrap{position:relative;height:190px;}
+
+/* ── Section header ── */
+.section-hdr{
+  display:flex;align-items:center;gap:12px;
+  margin:32px 0 16px;
+}
+.section-hdr h2{font-size:15px;font-weight:700;color:rgba(255,255,255,.85);}
+.section-hdr .count-pill{
+  background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.25);
+  color:#a5b4fc;font-size:11px;font-weight:600;
+  padding:2px 9px;border-radius:20px;
+}
+.section-hdr .line{flex:1;height:1px;background:rgba(255,255,255,.06);}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.search-wrap{position:relative;}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  width:14px;height:14px;color:rgba(255,255,255,.25);pointer-events:none;}
+.toolbar input[type=search]{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;color:#e2e8f0;
+  font-size:13px;padding:8px 12px 8px 32px;
+  width:280px;outline:none;
+  transition:border-color .2s,background .2s;
+  font-family:'Inter',sans-serif;
+}
+.toolbar input[type=search]:focus{
+  border-color:rgba(99,102,241,.5);
+  background:rgba(99,102,241,.06);
+}
+.toolbar input[type=search]::placeholder{color:rgba(255,255,255,.2);}
+.filter-btn{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;color:rgba(255,255,255,.5);
+  font-size:12px;font-weight:500;
+  padding:8px 14px;cursor:pointer;
+  transition:all .15s;font-family:'Inter',sans-serif;
+  display:flex;align-items:center;gap:6px;
+}
+.filter-btn:hover,.filter-btn.active{
+  background:rgba(99,102,241,.12);
+  border-color:rgba(99,102,241,.3);
+  color:#a5b4fc;
+}
+.filter-btn svg{width:12px;height:12px;}
+.toolbar-spacer{flex:1;}
+.result-count{font-size:12px;color:rgba(255,255,255,.25);}
+
+/* ── Table ── */
+.table-wrap{
+  background:rgba(255,255,255,.03);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:16px;overflow:hidden;
+}
+table{width:100%;border-collapse:collapse;}
+thead th{
+  background:rgba(255,255,255,.03);
+  color:rgba(255,255,255,.3);
+  font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.8px;
+  padding:12px 16px;text-align:left;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  white-space:nowrap;cursor:pointer;user-select:none;
+  transition:color .15s;
+}
+thead th:hover{color:rgba(255,255,255,.6);}
+thead th.sorted{color:#a5b4fc;}
+.sort-arrow{margin-left:4px;opacity:.5;font-size:10px;}
+.sorted .sort-arrow{opacity:1;}
+tbody tr{
+  border-bottom:1px solid rgba(255,255,255,.04);
+  transition:background .15s;
+}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(255,255,255,.03);}
+tbody td{padding:13px 16px;vertical-align:middle;}
+
+/* ── Cell components ── */
+.resource-id{
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;font-weight:500;
+  color:#818cf8;letter-spacing:-.3px;
+}
+.type-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;font-weight:600;
+  padding:4px 9px;border-radius:6px;white-space:nowrap;
+}
+.t-ebs{background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.2);}
+.t-ec2{background:rgba(251,146,60,.12);color:#fb923c;border:1px solid rgba(251,146,60,.2);}
+.t-eip{background:rgba(34,211,238,.12);color:#22d3ee;border:1px solid rgba(34,211,238,.2);}
+
+.reason-chip{
+  display:inline-block;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;font-weight:500;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+  padding:3px 8px;border-radius:5px;
+  color:rgba(255,255,255,.55);
+  max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.reason-chip.r-unattached{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#fca5a5;}
+.reason-chip.r-stopped{background:rgba(251,146,60,.08);border-color:rgba(251,146,60,.2);color:#fdba74;}
+.reason-chip.r-idle{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.2);color:#67e8f9;}
+.reason-chip.r-tags{background:rgba(250,204,21,.08);border-color:rgba(250,204,21,.2);color:#fde047;}
+
+.age-cell{font-size:12px;color:rgba(255,255,255,.45);}
+.age-cell.old{color:#fca5a5;}
+
+.cost-cell{font-size:13px;font-weight:700;}
+.cost-cell.c-high{color:#f87171;}
+.cost-cell.c-mid{color:#fb923c;}
+.cost-cell.c-low{color:rgba(255,255,255,.5);}
+.cost-bar-bg{height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:4px;width:80px;}
+.cost-bar-fill{height:2px;border-radius:2px;background:linear-gradient(90deg,#6366f1,#a855f7);}
+
+.tag-row{display:flex;flex-wrap:wrap;gap:3px;}
+.tag-chip{
+  font-size:10px;padding:2px 6px;border-radius:4px;
+  font-family:'JetBrains Mono',monospace;
+}
+.tag-ok{background:rgba(34,197,94,.08);color:#4ade80;border:1px solid rgba(34,197,94,.15);}
+.tag-miss{background:rgba(239,68,68,.08);color:#f87171;border:1px solid rgba(239,68,68,.15);}
+.tag-prot{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);}
+
+.safe-yes{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;font-weight:600;color:#4ade80;
+  background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.15);
+  padding:3px 8px;border-radius:5px;
+}
+.safe-no{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;font-weight:500;color:rgba(255,255,255,.25);
+}
+
+.action-btn{
+  font-size:11px;font-weight:600;
+  padding:5px 12px;border-radius:7px;
+  border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.04);
+  color:rgba(255,255,255,.4);
+  cursor:pointer;transition:all .15s;
+  font-family:'Inter',sans-serif;white-space:nowrap;
+}
+.action-btn:hover{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.4);color:#a5b4fc;}
+.action-btn.del:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#fca5a5;}
+.action-btn.rel:hover{background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#67e8f9;}
+
+.no-results{text-align:center;padding:60px;color:rgba(255,255,255,.2);font-size:14px;}
+
+/* ── Footer ── */
+footer{
+  margin-top:48px;padding-top:24px;
+  border-top:1px solid rgba(255,255,255,.06);
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  font-size:11px;color:rgba(255,255,255,.2);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2);}
+</style>
+
+</head>
+<body>
+<div class="bg-canvas"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <svg viewBox="0 0 32 32" fill="none">
+      <rect width="32" height="32" rx="8" fill="url(#ng)"/>
+      <path d="M8 22L14 10l4 8 3-5 5 9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <defs>
+        <linearGradient id="ng" x1="0" y1="0" x2="32" y2="32">
+          <stop offset="0%" stop-color="#6366f1"/>
+          <stop offset="100%" stop-color="#a855f7"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <div>
+      <div class="nav-title">NimbusKart</div>
+      <div class="nav-sub">Cost Janitor</div>
+    </div>
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-pill">
+    <span class="dot"></span>
+    <span id="nav-count">— orphans</span>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-meta" id="nav-meta">—</div>
+</nav>
+
+<div class="page">
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <div class="header-row">
+      <div>
+        <h1>Cloud Cost Intelligence</h1>
+        <p>Orphaned resource detection · NimbusKart staging environment</p>
+      </div>
+      <div class="scan-badge glass">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/>
+        </svg>
+        <span id="scan-ts">Last scan: —</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <!-- CHARTS -->
+  <div class="section-hdr">
+    <h2>Analytics</h2><div class="line"></div>
+  </div>
+  <div class="charts-row">
+    <div class="chart-card glass">
+      <div class="chart-title"><span style="background:#a855f7"></span>Cost by Type</div>
+      <div class="chart-wrap"><canvas id="cType"></canvas></div>
+    </div>
+    <div class="chart-card glass">
+      <div class="chart-title"><span style="background:#6366f1"></span>By Reason</div>
+      <div class="chart-wrap"><canvas id="cReason"></canvas></div>
+    </div>
+    <div class="chart-card glass">
+      <div class="chart-title"><span style="background:#22d3ee"></span>Cost per Resource</div>
+      <div class="chart-wrap"><canvas id="cBar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- FINDINGS TABLE -->
+  <div class="section-hdr">
+    <h2>Findings</h2>
+    <div class="count-pill" id="tbl-count">0</div>
+    <div class="line"></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/>
+      </svg>
+      <input type="search" id="q" placeholder="Search resource, reason, owner…"/>
+    </div>
+    <button class="filter-btn active" data-f="all">All</button>
+    <button class="filter-btn" data-f="ebs_volume">💾 EBS</button>
+    <button class="filter-btn" data-f="ec2_instance">🖥 EC2</button>
+    <button class="filter-btn" data-f="elastic_ip">🌐 EIP</button>
+    <button class="filter-btn" data-f="safe">✅ Safe</button>
+    <div class="toolbar-spacer"></div>
+    <div class="result-count" id="res-count"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-col="resource_id">Resource ID <span class="sort-arrow">↕</span></th>
+          <th data-col="resource_type">Type <span class="sort-arrow">↕</span></th>
+          <th data-col="reason">Reason <span class="sort-arrow">↕</span></th>
+          <th data-col="age_days">Age <span class="sort-arrow">↕</span></th>
+          <th data-col="estimated_monthly_cost_usd">$/month <span class="sort-arrow">↕</span></th>
+          <th>Tags</th>
+          <th data-col="safe_to_auto_delete">Safe? <span class="sort-arrow">↕</span></th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="no-results" id="no-res" style="display:none">
+      No findings match the current filters.
+    </div>
+  </div>
+
+  <footer>
+    <span id="ft-left">NimbusKart Cost Janitor · Dry-run mode</span>
+    <span id="ft-right">—</span>
+  </footer>
+</div>
+
+<script>
+// ── Report data ───────────────────────────────────────────────────────────────
+const REPORT = {"scan_timestamp":"2026-05-23T16:55:51Z","account_id":"123456789012","region":"us-east-1","summary":{"total_orphans":8,"estimated_monthly_waste_usd":58.21},"findings":[{"resource_id":"vol-d76eead0","resource_type":"ebs_volume","reason":"unattached","age_days":0,"estimated_monthly_cost_usd":8.0,"tags":{"Project":"nimbuskart","Environment":"staging","Owner":"data-engineering"},"suggested_action":"delete","safe_to_auto_delete":false},{"resource_id":"vol-4646b202","resource_type":"ebs_volume","reason":"missing_tags:Project,Environment,Owner","age_days":0,"estimated_monthly_cost_usd":0.64,"tags":{"Project":null,"Environment":null,"Owner":null},"suggested_action":"delete","safe_to_auto_delete":false},{"resource_id":"vol-4ea2246c","resource_type":"ebs_volume","reason":"unattached","age_days":0,"estimated_monthly_cost_usd":40.0,"tags":{"Project":null,"Environment":"prod","Owner":null},"suggested_action":"delete","safe_to_auto_delete":false},{"resource_id":"vol-97eecf20","resource_type":"ebs_volume","reason":"missing_tags:Project,Environment,Owner","age_days":0,"estimated_monthly_cost_usd":0.64,"tags":{"Project":null,"Environment":null,"Owner":null},"suggested_action":"delete","safe_to_auto_delete":false},{"resource_id":"vol-21493ed7","resource_type":"ebs_volume","reason":"unattached","age_days":0,"estimated_monthly_cost_usd":4.0,"tags":{"Project":"nimbuskart","Environment":"staging","Owner":"platform-team","Protected":"true"},"suggested_action":"delete","safe_to_auto_delete":false},{"resource_id":"i-9e6466231e3d4261c","resource_type":"ec2_instance","reason":"stopped>14d","age_days":31,"estimated_monthly_cost_usd":0.64,"tags":{"Project":"nimbuskart","Environment":"staging","Owner":"backend-team"},"suggested_action":"terminate","safe_to_auto_delete":false},{"resource_id":"i-5419aef9c3c1a6eeb","resource_type":"ec2_instance","reason":"missing_tags:Environment,Owner","age_days":0,"estimated_monthly_cost_usd":0.64,"tags":{"Project":"nimbuskart","Environment":null,"Owner":null},"suggested_action":"terminate","safe_to_auto_delete":false},{"resource_id":"eipalloc-cb6b29a8","resource_type":"elastic_ip","reason":"idle_eip","age_days":0,"estimated_monthly_cost_usd":3.65,"tags":{"Project":"nimbuskart","Environment":"staging","Owner":"platform-team"},"suggested_action":"release","safe_to_auto_delete":false}]};
+
+const F = REPORT.findings;
+const maxCost = Math.max(...F.map(f=>f.estimated_monthly_cost_usd));
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const TYPE_LABEL = {ebs_volume:'EBS Volume',ec2_instance:'EC2 Instance',elastic_ip:'Elastic IP'};
+const TYPE_ICON  = {ebs_volume:'💾',ec2_instance:'🖥',elastic_ip:'🌐'};
+const TYPE_CLS   = {ebs_volume:'t-ebs',ec2_instance:'t-ec2',elastic_ip:'t-eip'};
+
+function reasonCls(r){
+  if(r==='unattached') return 'r-unattached';
+  if(r.startsWith('stopped')) return 'r-stopped';
+  if(r==='idle_eip') return 'r-idle';
+  return 'r-tags';
+}
+function costCls(c){ return c>=10?'c-high':c>=3?'c-mid':'c-low'; }
+
+function tagChips(tags){
+  return Object.entries(tags).map(([k,v])=>{
+    if(k==='Protected'&&v&&v.toLowerCase()==='true')
+      return `<span class="tag-chip tag-prot">🔒 Protected</span>`;
+    if(v===null||v===undefined)
+      return `<span class="tag-chip tag-miss">${k}:✗</span>`;
+    return `<span class="tag-chip tag-ok">${k}:${v}</span>`;
+  }).join('');
+}
+
+function actionBtn(f){
+  const map={delete:['del','Delete'],terminate:['del','Terminate'],release:['rel','Release']};
+  const [cls,lbl]=map[f.suggested_action]||['','Action'];
+  return `<button class="action-btn ${cls}" onclick="toast('${f.resource_id}','${lbl}')">${lbl}</button>`;
+}
+
+function toast(id,action){
+  const t=document.createElement('div');
+  t.style.cssText=`position:fixed;bottom:28px;right:28px;z-index:9999;
+    background:rgba(15,20,40,.95);backdrop-filter:blur(20px);
+    border:1px solid rgba(99,102,241,.3);border-radius:12px;
+    padding:14px 20px;font-size:13px;color:#e2e8f0;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    animation:slideUp .25s ease;max-width:340px;`;
+  t.innerHTML=`<div style="font-weight:600;color:#a5b4fc;margin-bottom:4px">⚠️ Dry-run mode</div>
+    <div style="color:rgba(255,255,255,.5);font-size:12px">${action} not executed — re-run with <code style="color:#818cf8">--delete</code></div>
+    <div style="font-family:monospace;font-size:11px;color:rgba(255,255,255,.3);margin-top:6px">${id}</div>`;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},3000);
+}
+const style=document.createElement('style');
+style.textContent='@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}';
+document.head.appendChild(style);
+</script>
+
+<script>
+// ── Nav & header ──────────────────────────────────────────────────────────────
+const ts = new Date(REPORT.scan_timestamp);
+document.getElementById('nav-count').textContent = `${REPORT.summary.total_orphans} orphans`;
+document.getElementById('nav-meta').innerHTML =
+  `Account <strong>${REPORT.account_id}</strong> &nbsp;·&nbsp; <strong>${REPORT.region}</strong>`;
+document.getElementById('scan-ts').textContent =
+  `Last scan: ${ts.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} ${ts.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} UTC`;
+document.getElementById('ft-left').textContent =
+  `NimbusKart Cost Janitor · Account ${REPORT.account_id} · ${REPORT.region} · Dry-run`;
+document.getElementById('ft-right').textContent =
+  `Scan: ${ts.toISOString()} · ${F.length} findings`;
+
+// ── KPI cards ─────────────────────────────────────────────────────────────────
+const safeN   = F.filter(f=>f.safe_to_auto_delete).length;
+const protN   = F.filter(f=>f.tags&&f.tags.Protected&&f.tags.Protected.toLowerCase()==='true').length;
+const topF    = [...F].sort((a,b)=>b.estimated_monthly_cost_usd-a.estimated_monthly_cost_usd)[0];
+const monthly = REPORT.summary.estimated_monthly_waste_usd;
+
+const kpis=[
+  {label:'Total Orphans',   value:F.length,         sub:'resources flagged',
+   icon:'🔍', glow:'rgba(239,68,68,.4)',   iconBg:'rgba(239,68,68,.12)',   valColor:'#f87171', trend:null},
+  {label:'Monthly Waste',   value:`$${monthly.toFixed(2)}`, sub:`$${(monthly*12).toFixed(0)}/year`,
+   icon:'💸', glow:'rgba(251,146,60,.4)',  iconBg:'rgba(251,146,60,.12)',  valColor:'#fb923c', trend:null},
+  {label:'Safe to Delete',  value:safeN,            sub:'auto-deletable now',
+   icon:'✅', glow:'rgba(34,197,94,.3)',   iconBg:'rgba(34,197,94,.1)',    valColor:'#4ade80', trend:null},
+  {label:'Need Review',     value:F.length-safeN,   sub:'require human action',
+   icon:'👁', glow:'rgba(99,102,241,.4)',  iconBg:'rgba(99,102,241,.12)',  valColor:'#a5b4fc', trend:null},
+  {label:'Protected',       value:protN,            sub:'skipped in delete mode',
+   icon:'🔒', glow:'rgba(251,191,36,.3)',  iconBg:'rgba(251,191,36,.1)',   valColor:'#fbbf24', trend:null},
+];
+
+const grid=document.getElementById('kpi-grid');
+kpis.forEach(k=>{
+  const d=document.createElement('div');
+  d.className='kpi-card glass';
+  d.innerHTML=`
+    <div class="kpi-glow" style="background:${k.glow}"></div>
+    <div class="kpi-icon" style="background:${k.iconBg}">${k.icon}</div>
+    <div class="kpi-label">${k.label}</div>
+    <div class="kpi-value" style="color:${k.valColor}">${k.value}</div>
+    <div class="kpi-sub">${k.sub}</div>`;
+  grid.appendChild(d);
+});
+</script>
+
+<script>
+// ── Chart defaults ────────────────────────────────────────────────────────────
+Chart.defaults.color='rgba(255,255,255,.35)';
+Chart.defaults.font.family="'Inter',system-ui,sans-serif";
+const GRID_COLOR='rgba(255,255,255,.05)';
+const TICK_COLOR='rgba(255,255,255,.3)';
+
+// Chart 1 — Donut: cost by type
+(()=>{
+  const byType={};
+  F.forEach(f=>{byType[f.resource_type]=(byType[f.resource_type]||0)+f.estimated_monthly_cost_usd;});
+  new Chart(document.getElementById('cType'),{
+    type:'doughnut',
+    data:{
+      labels:Object.keys(byType).map(t=>TYPE_LABEL[t]||t),
+      datasets:[{
+        data:Object.values(byType),
+        backgroundColor:['rgba(168,85,247,.7)','rgba(251,146,60,.7)','rgba(34,211,238,.7)'],
+        borderColor:['#a855f7','#fb923c','#22d3ee'],
+        borderWidth:1,hoverOffset:8,
+      }]
+    },
+    options:{
+      cutout:'68%',
+      plugins:{
+        legend:{position:'bottom',labels:{color:TICK_COLOR,font:{size:11},padding:14,boxWidth:10,boxHeight:10}},
+        tooltip:{callbacks:{label:ctx=>` $${ctx.parsed.toFixed(2)}/mo`},
+          backgroundColor:'rgba(10,15,30,.9)',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e2e8f0',bodyColor:'rgba(255,255,255,.6)',padding:10,cornerRadius:8}
+      }
+    }
+  });
+})();
+
+// Chart 2 — Donut: by reason
+(()=>{
+  const cats={unattached:0,stopped:0,idle_eip:0,missing_tags:0};
+  F.forEach(f=>{
+    if(f.reason==='unattached') cats.unattached++;
+    else if(f.reason.startsWith('stopped')) cats.stopped++;
+    else if(f.reason==='idle_eip') cats.idle_eip++;
+    else cats.missing_tags++;
+  });
+  new Chart(document.getElementById('cReason'),{
+    type:'doughnut',
+    data:{
+      labels:['Unattached','Stopped','Idle EIP','Missing Tags'],
+      datasets:[{
+        data:[cats.unattached,cats.stopped,cats.idle_eip,cats.missing_tags],
+        backgroundColor:['rgba(239,68,68,.65)','rgba(251,146,60,.65)','rgba(34,211,238,.65)','rgba(250,204,21,.65)'],
+        borderColor:['#ef4444','#fb923c','#22d3ee','#facc15'],
+        borderWidth:1,hoverOffset:8,
+      }]
+    },
+    options:{
+      cutout:'68%',
+      plugins:{
+        legend:{position:'bottom',labels:{color:TICK_COLOR,font:{size:11},padding:14,boxWidth:10,boxHeight:10}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.parsed} finding(s)`},
+          backgroundColor:'rgba(10,15,30,.9)',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e2e8f0',bodyColor:'rgba(255,255,255,.6)',padding:10,cornerRadius:8}
+      }
+    }
+  });
+})();
+
+// Chart 3 — Horizontal bar: cost per resource
+(()=>{
+  const sorted=[...F].sort((a,b)=>b.estimated_monthly_cost_usd-a.estimated_monthly_cost_usd);
+  const colors=sorted.map(f=>({
+    ebs_volume:'rgba(168,85,247,.7)',
+    ec2_instance:'rgba(251,146,60,.7)',
+    elastic_ip:'rgba(34,211,238,.7)',
+  }[f.resource_type]||'rgba(99,102,241,.7)'));
+  new Chart(document.getElementById('cBar'),{
+    type:'bar',
+    data:{
+      labels:sorted.map(f=>f.resource_id.length>20?f.resource_id.slice(0,20)+'…':f.resource_id),
+      datasets:[{
+        label:'$/month',
+        data:sorted.map(f=>f.estimated_monthly_cost_usd),
+        backgroundColor:colors,
+        borderColor:colors.map(c=>c.replace('.7','.9')),
+        borderWidth:1,borderRadius:5,borderSkipped:false,
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` $${ctx.parsed.x.toFixed(2)}/mo`},
+          backgroundColor:'rgba(10,15,30,.9)',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e2e8f0',bodyColor:'rgba(255,255,255,.6)',padding:10,cornerRadius:8}
+      },
+      scales:{
+        x:{grid:{color:GRID_COLOR},ticks:{color:TICK_COLOR,font:{size:10},callback:v=>`$${v}`},border:{color:'transparent'}},
+        y:{grid:{display:false},ticks:{color:TICK_COLOR,font:{size:10,family:"'JetBrains Mono',monospace"}},border:{color:'transparent'}}
+      }
+    }
+  });
+})();
+</script>
+
+<script>
+// ── Table ─────────────────────────────────────────────────────────────────────
+let sortCol='estimated_monthly_cost_usd', sortDir=-1;
+let activeFilter='all', searchQ='';
+
+function filtered(){
+  return F.filter(f=>{
+    if(activeFilter==='safe'&&!f.safe_to_auto_delete) return false;
+    if(activeFilter!=='all'&&activeFilter!=='safe'&&f.resource_type!==activeFilter) return false;
+    if(searchQ){
+      const q=searchQ.toLowerCase();
+      const haystack=[f.resource_id,f.reason,...Object.values(f.tags).filter(Boolean)].join(' ').toLowerCase();
+      if(!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable(){
+  const rows=filtered().sort((a,b)=>{
+    let av=a[sortCol],bv=b[sortCol];
+    if(typeof av==='boolean'){av=av?1:0;bv=bv?1:0;}
+    if(typeof av==='string') return sortDir*av.localeCompare(bv);
+    return sortDir*(av-bv);
+  });
+
+  document.getElementById('tbl-count').textContent=rows.length;
+  document.getElementById('res-count').textContent=
+    rows.length<F.length?`Showing ${rows.length} of ${F.length}`:`${F.length} findings`;
+
+  const tbody=document.getElementById('tbody');
+  const noRes=document.getElementById('no-res');
+
+  if(!rows.length){tbody.innerHTML='';noRes.style.display='block';return;}
+  noRes.style.display='none';
+
+  tbody.innerHTML=rows.map(f=>{
+    const barW=Math.round((f.estimated_monthly_cost_usd/maxCost)*100);
+    const rCls=reasonCls(f.reason);
+    const aCls=f.suggested_action==='release'?'rel':'del';
+    const aLbl={delete:'Delete',terminate:'Terminate',release:'Release'}[f.suggested_action]||'Action';
+    return `<tr>
+      <td><span class="resource-id">${f.resource_id}</span></td>
+      <td><span class="type-badge ${TYPE_CLS[f.resource_type]}">${TYPE_ICON[f.resource_type]} ${TYPE_LABEL[f.resource_type]}</span></td>
+      <td><span class="reason-chip ${rCls}" title="${f.reason}">${f.reason}</span></td>
+      <td><span class="age-cell${f.age_days>20?' old':''}">${f.age_days}d</span></td>
+      <td>
+        <span class="cost-cell ${costCls(f.estimated_monthly_cost_usd)}">$${f.estimated_monthly_cost_usd.toFixed(2)}</span>
+        <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:${barW}%"></div></div>
+      </td>
+      <td><div class="tag-row">${tagChips(f.tags)}</div></td>
+      <td>${f.safe_to_auto_delete
+        ?'<span class="safe-yes">✅ Yes</span>'
+        :'<span class="safe-no">— No</span>'}</td>
+      <td><button class="action-btn ${aCls}" onclick="toast('${f.resource_id}','${aLbl}')">${aLbl}</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// Sort
+document.querySelectorAll('thead th[data-col]').forEach(th=>{
+  th.addEventListener('click',()=>{
+    const col=th.dataset.col;
+    if(sortCol===col) sortDir*=-1; else{sortCol=col;sortDir=-1;}
+    document.querySelectorAll('thead th').forEach(h=>{
+      h.classList.remove('sorted');
+      const a=h.querySelector('.sort-arrow');
+      if(a) a.textContent='↕';
+    });
+    th.classList.add('sorted');
+    th.querySelector('.sort-arrow').textContent=sortDir===-1?'↓':'↑';
+    renderTable();
+  });
+});
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter=btn.dataset.f;
+    renderTable();
+  });
+});
+
+// Search
+document.getElementById('q').addEventListener('input',e=>{
+  searchQ=e.target.value;renderTable();
+});
+
+// Initial render — sort by cost desc
+renderTable();
+</script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# cost-janitor.yml
+#
+# Runs on every pull request targeting main or develop.
+#
+# Job flow
+# ────────
+#  1. Checkout
+#  2. Python setup + pip cache
+#  3. Install terraform-local + janitor deps
+#  4. Wait for LocalStack service to be healthy
+#  5. terraform init + apply (tflocal)
+#  6. Cost Janitor dry-run  → output/report.json + output/report.md
+#  7. Upload artifacts      (always, even when orphans found)
+#  8. Post PR comment       (only when total_orphans > 0)
+#
+# No secrets required — runs green on a fresh fork.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Cost Janitor
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Shared AWS environment — all steps inherit these.
+# Credentials are the LocalStack "test" values; no real AWS account needed.
+env:
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localhost:4566
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  cost-janitor:
+    name: Cost Janitor
+    runs-on: ubuntu-latest
+
+    # ── LocalStack service container ─────────────────────────────────────────
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - "4566:4566"
+        env:
+          SERVICES: ec2,s3,iam
+        options: >-
+          --health-cmd "curl -s http://localhost:4566/_localstack/health"
+          --health-interval 10s
+          --health-retries 10
+
+    # ── Permissions needed for the PR-comment step ───────────────────────────
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ──────────────────────────────────────────────────────
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # ── 3. Pip cache ─────────────────────────────────────────────────────────
+      # Key includes the hash of requirements.txt so the cache is invalidated
+      # whenever a dependency version changes.
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('janitor/requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+
+      # ── 4. Install dependencies ──────────────────────────────────────────────
+      - name: Install terraform-local
+        run: pip install terraform-local
+
+      - name: Install janitor dependencies
+        run: pip install -r janitor/requirements.txt
+
+      # ── 5. Wait for LocalStack ───────────────────────────────────────────────
+      # The service container health-check handles the initial wait, but we add
+      # an explicit retry loop as a belt-and-suspenders guard for slow runners.
+      - name: Wait for LocalStack to be healthy
+        run: |
+          echo "Waiting for LocalStack at http://localhost:4566 ..."
+          deadline=$(( $(date +%s) + 60 ))
+          until curl -sf http://localhost:4566/_localstack/health | grep -q '"ec2": "available"'; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "ERROR: LocalStack did not become healthy within 60 s"
+              curl -s http://localhost:4566/_localstack/health || true
+              exit 1
+            fi
+            echo "  still waiting..."
+            sleep 3
+          done
+          echo "LocalStack is healthy."
+
+      # ── 6. Terraform init + apply ────────────────────────────────────────────
+      # continue-on-error: true so that the janitor and artifact-upload steps
+      # still run even if Terraform fails (e.g. a LocalStack feature gap).
+      - name: Terraform init
+        id: tf_init
+        working-directory: terraform
+        continue-on-error: true
+        run: tflocal init -input=false
+
+      - name: Terraform apply
+        id: tf_apply
+        working-directory: terraform
+        continue-on-error: true
+        # Only attempt apply when init succeeded.
+        if: steps.tf_init.outcome == 'success'
+        run: tflocal apply -auto-approve -input=false
+
+      # ── 7. Run Cost Janitor (dry-run) ────────────────────────────────────────
+      # Exit code 1 means orphans were found — that is expected and handled by
+      # the PR-comment step below.  continue-on-error keeps the job green so
+      # the artifact upload always runs.
+      - name: Run Cost Janitor (dry-run)
+        id: janitor
+        continue-on-error: true
+        env:
+          # Ensure the janitor package is importable via -m janitor.janitor
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m janitor.janitor \
+            --dry-run \
+            --output-dir ./output \
+            --region us-east-1
+
+      # ── 8. Upload report artifacts ───────────────────────────────────────────
+      # always() ensures this runs even when earlier steps fail or are skipped.
+      - name: Upload cost-janitor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cost-janitor-report
+          path: output/
+          retention-days: 7
+          if-no-files-found: warn
+
+      # ── 9. Post PR comment when orphans are found ────────────────────────────
+      # Reads output/report.json to check total_orphans, then posts the contents
+      # of output/report.md as a PR comment.
+      # Skipped when report.json does not exist (janitor never ran).
+      - name: Post PR comment if orphans found
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const jsonPath = path.join(process.env.GITHUB_WORKSPACE, 'output', 'report.json');
+            const mdPath   = path.join(process.env.GITHUB_WORKSPACE, 'output', 'report.md');
+
+            // Guard: report files must exist before we try to read them.
+            if (!fs.existsSync(jsonPath)) {
+              core.info('report.json not found — skipping PR comment.');
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+            const totalOrphans = report?.summary?.total_orphans ?? 0;
+
+            if (totalOrphans === 0) {
+              core.info(`No orphans found (total_orphans=${totalOrphans}). Skipping PR comment.`);
+              return;
+            }
+
+            // Read the Markdown report; fall back to a minimal message if missing.
+            let mdBody = '';
+            if (fs.existsSync(mdPath)) {
+              mdBody = fs.readFileSync(mdPath, 'utf8');
+            } else {
+              mdBody = `_report.md not found — see report.json artifact for details._`;
+            }
+
+            const commentBody = [
+              '## 🧹 Cost Janitor Report',
+              '',
+              `> **${totalOrphans} orphaned resource(s) detected** — estimated monthly waste: **$${report.summary.estimated_monthly_waste_usd.toFixed(2)}**`,
+              '',
+              mdBody,
+              '',
+              '---',
+              `_Scan timestamp: ${report.scan_timestamp} · Region: ${report.region}_`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner:    context.repo.owner,
+              repo:     context.repo.repo,
+              issue_number: context.issue.number,
+              body:     commentBody,
+            });
+
+            core.info(`PR comment posted (${totalOrphans} orphan(s) found).`);

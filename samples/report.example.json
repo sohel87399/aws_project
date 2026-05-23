@@ -1,0 +1,81 @@
+{
+  "scan_timestamp": "2026-05-20T06:00:04Z",
+  "account_id": "847392015648",
+  "region": "us-east-1",
+  "summary": {
+    "total_orphans": 5,
+    "estimated_monthly_waste_usd": 52.93
+  },
+  "findings": [
+    {
+      "resource_id": "vol-0f3a8c21d4b7e9051",
+      "resource_type": "ebs_volume",
+      "reason": "unattached",
+      "age_days": 47,
+      "estimated_monthly_cost_usd": 8.00,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "data-engineering"
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": true
+    },
+    {
+      "resource_id": "i-0b7d3f92a1c84e560",
+      "resource_type": "ec2_instance",
+      "reason": "stopped>14d",
+      "age_days": 31,
+      "estimated_monthly_cost_usd": 0.64,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "backend-team"
+      },
+      "suggested_action": "terminate",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "eipalloc-0c4e7f1a2b3d8059",
+      "resource_type": "elastic_ip",
+      "reason": "idle_eip",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 3.65,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "platform-team"
+      },
+      "suggested_action": "release",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-0d9f4a17b2c63e802",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Owner",
+      "age_days": 83,
+      "estimated_monthly_cost_usd": 40.00,
+      "tags": {
+        "Project": null,
+        "Environment": "prod",
+        "Owner": null
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "i-0a2c6e85f3d17b904",
+      "resource_type": "ec2_instance",
+      "reason": "missing_tags:Environment,Owner",
+      "age_days": 12,
+      "estimated_monthly_cost_usd": 0.64,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "terminate",
+      "safe_to_auto_delete": false
+    }
+  ]
+}
